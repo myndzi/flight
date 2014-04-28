@@ -21,18 +21,17 @@ function Flight(config) {
     this.dist = typeof config.distance === 'number' ? config.distance : 1;
     this.items = [ ];
     
-    var p = PATH.join(this.path, '.flight'), q;
+    var p = PATH.join(this.path, '.flight');
     if (typeof config.position === 'number') {
         log.info('Configured at position: ' + config.position);
         this.pos = config.position;
     } else if (fs.existsSync(p)) {
-        q = parseInt(fs.readFileSync(p), 10);
-        if (typeof q === 'number' && Number.isFinite(q)) {
-            log.info('Loaded position from file: ' + q);
-            this.pos = q;
+        var contents = fs.readFileSync(p).toString();
+        if (/^\d+$/.test(contents)) {
+            log.info('Loaded position from file: ' + contents);
+            this.pos = contents;
         } else {
-            // mind your p's and q's :V
-            log.warn(p + ' contained an invalid value: ' + q);
+            log.warn(p + ' contained an invalid value: ' + contents);
         }
     }
     if (this.pos === void 0) {
@@ -73,9 +72,10 @@ Flight.prototype.up = function (_target) {
             } else {
                 promise = promise.then(function () {
                     var res = item.up();
-                    if (Promise.is(res)) {
-                        res = res.tap(function (newPos) {
+                    if (typeof res.then === 'function') {
+                        res = res.then(function (res) {
                             self.setPos(newPos);
+                            return res;
                         }).catch(function (err) {
                             if (typeof item.recover === 'function') {
                                 log.warn('Attempting to recover from error:', err);
@@ -84,6 +84,7 @@ Flight.prototype.up = function (_target) {
                             throw err;
                         });
                     } else {
+                        log.warn('didn\'t return a promise');
                         self.setPos(newPos);
                     }
                     return res;
@@ -93,7 +94,10 @@ Flight.prototype.up = function (_target) {
         i++; count--;
     }
     
-    return promise;
+    return promise.catch(function (err) {
+        log.error(err);
+        self.end();
+    });
 };
 
 Flight.prototype.downTo =
@@ -113,7 +117,7 @@ Flight.prototype.down = function (_target) {
         promise = Promise.resolve();
     
     // seek to current position
-    while (i < x && curPos <= self.items[i].idx) { i++; }
+    while (i < x && curPos < self.items[i].idx) { i++; }
     i--;
     
     // apply migrations
@@ -126,11 +130,13 @@ Flight.prototype.down = function (_target) {
                 promise = promise.then(function () {
                     var res = item.down();
                     
-                    if (Promise.is(res)) {
-                        res = res.tap(function () {
+                    if (typeof res.then === 'function') {
+                        res = res.then(function (res) {
                             self.setPos(newPos);
+                            return res;
                         });
                     } else {
+                        log.warn('didn\'t return a promise');
                         self.setPos(newPos);
                     }
                     
@@ -142,7 +148,10 @@ Flight.prototype.down = function (_target) {
         i--; count--;
     }
     
-    return promise;
+    return promise.catch(function (err) {
+        log.error(err);
+        self.end();
+    });
 };
 Flight.prototype.loadFiles = function () {
     log.trace('Flight.loadFiles()');
@@ -178,7 +187,7 @@ Flight.prototype.loadFiles = function () {
 
 Flight.prototype.end = function () {
     log.info('Ending position: ' + this.pos);
-    fs.writeFile(PATH.join(this.path, '.flight'), this.pos);
+    fs.writeFileSync(PATH.join(this.path, '.flight'), this.pos);
     this.knex.client.pool.destroy();
 };
 
