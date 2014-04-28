@@ -1,0 +1,16 @@
+{
+  "name": "flight",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "logger": "git+https://github.com/myndzi/logger.git",
+    "bluebird": "^1.2.4",
+    "knex": "^0.5.13"
+  }
+}
