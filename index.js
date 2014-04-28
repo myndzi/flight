@@ -4,7 +4,7 @@ var fs = require('fs'),
     Promise = require('bluebird');
 
 var baseDir = PATH.dirname(__dirname),
-    log = new Logger('Migration', 'silly');
+    log = new Logger('Migration');
 
 module.exports = Flight;
 
@@ -66,11 +66,14 @@ Flight.prototype.up = function (_target) {
     // apply migrations
     while (i < x && count) {
         (function (item, newPos) {
-            log.silly('Migrating up: ' + item.name);
             if (self.dry) {
-                promise = promise.then(item.dryUp());
+                promise = promise.then(function () {
+                    log.silly('Migrating up: ' + item.name);
+                    return item.dryUp()
+                });
             } else {
                 promise = promise.then(function () {
+                    log.silly('Migrating up: ' + item.name);
                     var res = item.up();
                     if (typeof res.then === 'function') {
                         res = res.then(function (res) {
@@ -119,15 +122,17 @@ Flight.prototype.down = function (_target) {
     // seek to current position
     while (i < x && curPos < self.items[i].idx) { i++; }
     i--;
-    
     // apply migrations
     while (i >= 0 && count) {
         (function (item, newPos) {
-            log.silly('Migrating down: ' + item.name);
             if (self.dry) {
-                promise = promise.then(item.dryDown());
+                promise = promise.then(function () {
+                    log.silly('Migrating down: ' + item.name);
+                    return item.dryDown();
+                });
             } else {
                 promise = promise.then(function () {
+                log.silly('Migrating down: ' + item.name);
                     var res = item.down();
                     
                     if (typeof res.then === 'function') {
@@ -150,7 +155,6 @@ Flight.prototype.down = function (_target) {
     
     return promise.catch(function (err) {
         log.error(err);
-        self.end();
     });
 };
 Flight.prototype.loadFiles = function () {
