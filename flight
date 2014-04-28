@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+
+var cmd = process.argv[2],
+    name = process.argv[3];
+
+switch (cmd) {
+    case 'create':
+        if (name) {
+            createFile(name);
+            break;
+        }
+    
+    default:
+        console.error('Usage: flight create <name>');
+        process.exit(1);
+    break;
+}
+
+function createFile(name) {
+    var fileName = [
+            './migrations/',
+            (new Date()).toISOString().replace(/\D/g, ''),
+            '-' + name + '.js'
+        ].join('');
+
+    var fs = require('fs');
+    
+    if (!fs.existsSync('./migrations')) {
+        fs.mkdirSync('./migrations');
+    }
+    if (fs.existsSync(fileName)) {
+        console.error('File exists: ' + fileName);
+        process.exit(2);
+    }
+    
+    var inStream = fs.createReadStream(__dirname + '/boilerplate.js'),
+        outStream = fs.createWriteStream(fileName);
+        
+    inStream.pipe(outStream);
+    
+    inStream.on('end', function () {
+        process.exit(0);
+    });
+    
+    inStream.on('error', function (err) {
+        console.error('Error:', err);
+        process.exit(3);
+    });
+}
