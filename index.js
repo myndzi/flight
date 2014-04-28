@@ -1,11 +1,10 @@
 var fs = require('fs'),
-    Knex = require('knex'),
     PATH = require('path'),
     Logger = require('logger'),
     Promise = require('bluebird');
 
 var baseDir = PATH.dirname(__dirname),
-    log = new Logger('Migration', 'trace');
+    log = new Logger('Migration', 'silly');
 
 module.exports = Flight;
 
@@ -13,23 +12,33 @@ function Flight(config) {
     log.trace('new Flight()');
     
     config = config || { };
-    if (!config.db) { throw new Error('No database configuration supplied'); }
-    this.knex = Knex.initialize({
-        client: config.db.client,
-        connection: {
-            host: config.db.host,
-            user: config.db.user,
-            password: config.db.pass,
-            database: config.db.name,
-            charset: 'utf8'
-        }
-    });
+    if (!config.knex) { throw new Error('Please supply an instance of knex'); }
+    this.knex = config.knex;
     this.dry = config.dry || false;
     this.path = config.path || PATH.join(baseDir, 'migrations');
+    log.silly('Using path: ' + this.path);
     this.mask = config.math || /^(\d+)-.*\.js$/;
     this.dist = typeof config.distance === 'number' ? config.distance : 1;
-    this.pos = typeof config.position === 'number' ? config.position : 0;
     this.items = [ ];
+    
+    var p = PATH.join(this.path, '.flight'), q;
+    if (typeof config.position === 'number') {
+        log.info('Configured at position: ' + config.position);
+        this.pos = config.position;
+    } else if (fs.existsSync(p)) {
+        q = parseInt(fs.readFileSync(p), 10);
+        if (typeof q === 'number' && Number.isFinite(q)) {
+            log.info('Loaded position from file: ' + q);
+            this.pos = q;
+        } else {
+            // mind your p's and q's :V
+            log.warn(p + ' contained an invalid value: ' + q);
+        }
+    }
+    if (this.pos === void 0) {
+        log.info('Defaulting to position: ' + 0);
+        this.pos = 0;
+    }
 };
 Flight.prototype.setPos = function (pos) {
     log.trace('Position updated to: ' + pos);
@@ -53,10 +62,7 @@ Flight.prototype.up = function (_target) {
         promise = Promise.resolve();
     
     // seek to current position
-    while (i < x && curPos > self.items[i].idx) {
-        console.log(curPos, '<=', self.items[i].idx, '?');
-        i++;
-    }
+    while (i < x && curPos >= self.items[i].idx) { i++; }
     
     // apply migrations
     while (i < x && count) {
@@ -67,15 +73,20 @@ Flight.prototype.up = function (_target) {
             } else {
                 promise = promise.then(function () {
                     var res = item.up();
-                    return res.tap(function () {
-                        self.setPos(newPos);
-                    }).catch(function (err) {
-                        if (item.recover) {
-                            return item.recover().throw(err);
-                        } else {
+                    if (Promise.is(res)) {
+                        res = res.tap(function (newPos) {
+                            self.setPos(newPos);
+                        }).catch(function (err) {
+                            if (typeof item.recover === 'function') {
+                                log.warn('Attempting to recover from error:', err);
+                                return item.recover();
+                            }
                             throw err;
-                        }
-                    });
+                        });
+                    } else {
+                        self.setPos(newPos);
+                    }
+                    return res;
                 });
             }
         })(self.items[i], self.items[i].idx);
@@ -102,24 +113,28 @@ Flight.prototype.down = function (_target) {
         promise = Promise.resolve();
     
     // seek to current position
-    while (i < x && curPos <= self.items[i].idx) {
-        console.log(curPos, '<=', self.items[i].idx, '?');
-        i++;
-    }
+    while (i < x && curPos <= self.items[i].idx) { i++; }
     i--;
     
     // apply migrations
     while (i >= 0 && count) {
-        (function (item, newIdx) {
+        (function (item, newPos) {
             log.silly('Migrating down: ' + item.name);
             if (self.dry) {
                 promise = promise.then(item.dryDown());
             } else {
                 promise = promise.then(function () {
                     var res = item.down();
-                    return res.tap(function () {
-                        self.setPos(newIdx);
-                    });
+                    
+                    if (Promise.is(res)) {
+                        res = res.tap(function () {
+                            self.setPos(newPos);
+                        });
+                    } else {
+                        self.setPos(newPos);
+                    }
+                    
+                    return res;
                 });
             }
         })(self.items[i], i > 0 ? self.items[i-1].idx : 0);
@@ -162,10 +177,13 @@ Flight.prototype.loadFiles = function () {
 };
 
 Flight.prototype.end = function () {
+    log.info('Ending position: ' + this.pos);
+    fs.writeFile(PATH.join(this.path, '.flight'), this.pos);
     this.knex.client.pool.destroy();
 };
 
 function Migration(opts, deps) {
+    log.trace('new Migration()', opts);
     this.fullPath = opts.path;
     this.name = PATH.basename(opts.path, '.js');
     this.idx = opts.idx;
