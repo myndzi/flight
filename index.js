@@ -55,7 +55,7 @@ Flight.prototype.up = function (_target) {
     var self = this,
         i = 0,
         x = self.items.length,
-        target = _target || self.items[x-1].idx,
+        target = _target === void 0 ? self.items[x-1].idx : _target,
         curPos = self.pos,
         count = self.dist,
         promise = Promise.resolve();
@@ -75,14 +75,17 @@ Flight.prototype.up = function (_target) {
                 promise = promise.then(function () {
                     log.silly('Migrating up: ' + item.name);
                     var res = item.up();
-                    if (typeof res.then === 'function') {
+                    if (res && typeof res.then === 'function') {
                         res = res.then(function (res) {
                             self.setPos(newPos);
                             return res;
                         }).catch(function (err) {
                             if (typeof item.recover === 'function') {
                                 log.warn('Attempting to recover from error:', err);
-                                return item.recover();
+                                var rec = item.recover();
+                                if (rec && typeof rec.then === 'function') {
+                                    return rec;
+                                }
                             }
                             throw err;
                         });
@@ -100,6 +103,7 @@ Flight.prototype.up = function (_target) {
     return promise.catch(function (err) {
         log.error(err);
         self.end();
+        throw err;
     });
 };
 
@@ -114,14 +118,15 @@ Flight.prototype.down = function (_target) {
     var self = this,
         i = 0,
         x = self.items.length,
-        target = _target || self.items[x-1].idx,
+        target = _target === void 0 ? self.items[x-1].idx : _target,
         curPos = self.pos,
         count = self.dist,
         promise = Promise.resolve();
     
     // seek to current position
-    while (i < x && curPos < self.items[i].idx) { i++; }
+    while (i < x && curPos >= self.items[i].idx) { i++; }
     i--;
+    
     // apply migrations
     while (i >= 0 && count) {
         (function (item, newPos) {
@@ -132,10 +137,10 @@ Flight.prototype.down = function (_target) {
                 });
             } else {
                 promise = promise.then(function () {
-                log.silly('Migrating down: ' + item.name);
+                    log.silly('Migrating down: ' + item.name);
                     var res = item.down();
                     
-                    if (typeof res.then === 'function') {
+                    if (res && typeof res.then === 'function') {
                         res = res.then(function (res) {
                             self.setPos(newPos);
                             return res;
@@ -155,6 +160,8 @@ Flight.prototype.down = function (_target) {
     
     return promise.catch(function (err) {
         log.error(err);
+        self.end();
+        throw err;
     });
 };
 Flight.prototype.loadFiles = function () {

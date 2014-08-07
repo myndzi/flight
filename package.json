@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "logger": "git+https://github.com/myndzi/logger.git",
-    "bluebird": "^1.2.4"
+    "bluebird": "^2.2.2",
+    "logger": "git+https://github.com/myndzi/logger.git"
   }
 }
