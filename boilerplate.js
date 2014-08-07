@@ -1,7 +1,7 @@
 'use strict';
 
 module.exports = function (deps) {
-    var Promise = deps.promise,
+    var Promise = deps.Promise,
         knex = deps.knex,
         log = deps.log;
     
