@@ -6,6 +6,10 @@ var fs = require('fs'),
 var baseDir = PATH.dirname(__dirname),
     log = new Logger('Migration');
 
+if (process.NODE_ENV === 'testing') {
+    log.level = 0;
+}
+
 module.exports = Flight;
 
 function Flight(config) {
@@ -90,8 +94,8 @@ Flight.prototype.up = function (_target) {
                             throw err;
                         });
                     } else {
-                        log.warn('didn\'t return a promise');
-                        self.setPos(newPos);
+                        throw new Error('Function didn\'t return a promise');
+                        //self.setPos(newPos);
                     }
                     return res;
                 });
@@ -146,8 +150,8 @@ Flight.prototype.down = function (_target) {
                             return res;
                         });
                     } else {
-                        log.warn('didn\'t return a promise');
-                        self.setPos(newPos);
+                        throw new Error('Function didn\'t return a promise');
+                        //self.setPos(newPos);
                     }
                     
                     return res;
