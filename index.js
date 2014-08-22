@@ -1,173 +1,264 @@
 var fs = require('fs'),
+    Knex = require('knex'),
     PATH = require('path'),
     Logger = require('logger'),
     Promise = require('bluebird');
 
-var baseDir = PATH.dirname(__dirname),
-    log = new Logger('Migration');
+Promise.promisifyAll(fs, { suffix: '$' });
 
-if (process.NODE_ENV === 'testing') {
-    log.level = 0;
-}
+var parentRoot = require('parent-root');
+
+var baseDir = parentRoot(),
+    log = new Logger('Migration', 'trace');
 
 module.exports = Flight;
 
 function Flight(config) {
     log.trace('new Flight()');
-    
+
+    var self = this;
     config = config || { };
-    if (!config.knex) { throw new Error('Please supply an instance of knex'); }
-    this.knex = config.knex;
+    
+    if (!config.knex) {
+        log.trace('Using in-memory sqlite3 database');
+        this.knex = Knex({
+            client: 'sqlite3',
+            connection: { filename: ':memory:' }
+        });
+    } else if (typeof config.knex === 'function') {
+        log.trace('Using provided instance of knex');
+        this.knex = config.knex;
+    } else {
+        log.trace('Using provided database configuration');
+        this.knex = Knex(config.knex);
+    }
+    
     this.dry = config.dry || false;
     this.path = config.path || PATH.join(baseDir, 'migrations');
     log.silly('Using path: ' + this.path);
     this.mask = config.math || /^(\d+)-.*\.js$/;
     this.dist = typeof config.distance === 'number' ? config.distance : 1;
+
+    this._init = null;
+    
     this.items = [ ];
+    this.idx = -1;
+    this.pos = config.hasOwnProperty('version') ? config.version : -1;
+}
+Flight.prototype.init = function () {
+    log.trace('Flight.init()');
     
-    var p = PATH.join(this.path, '.flight');
-    if (typeof config.position === 'number') {
-        log.info('Configured at position: ' + config.position);
-        this.pos = config.position;
-    } else if (fs.existsSync(p)) {
-        var contents = fs.readFileSync(p).toString();
-        if (/^\d+$/.test(contents)) {
-            log.info('Loaded position from file: ' + contents);
-            this.pos = contents;
-        } else {
-            log.warn(p + ' contained an invalid value: ' + contents);
-        }
-    }
-    if (this.pos === void 0) {
-        log.info('Defaulting to position: ' + 0);
-        this.pos = 0;
-    }
+    var self = this;
+    
+    if (self._init) { return self._init; }
+    
+    return self._init = Promise.all([
+        self.loadFiles(self.path),
+        self.loadPos()
+    ]).spread(function (items, pos) {
+        self.items = items;
+        self.pos = pos;
+        self.idx = self.getIdx();
+        console.log('index: ', self.idx);
+        self.initialized = true;
+    });
 };
-Flight.prototype.setPos = function (pos) {
-    log.trace('Position updated to: ' + pos);
+Flight.prototype.loadPos = Promise.method(function () {
+    log.trace('Flight.loadPos()');
     
-    this.pos = pos;
+    var self = this,
+        knex = self.knex,
+        pos = parseInt(self.pos, 10);
+    
+    if (!isNaN(pos) && pos >= 0) {
+        log.info('Loaded position from configuration: ' + pos);
+        return pos;
+    }
+    
+    var versionFile = PATH.join(self.path, '.flight');
+
+    log.trace('Checking for version in database');
+    return knex('__flight').select('version')
+    .then(function (rows) {
+        if (!rows.length) { throw 'no results'; }
+        var pos = parseInt(rows[0].version, 10);
+        if (isNaN(pos)) { throw 'invalid'; }
+        log.info('Loaded position from database: ' + pos);
+        return pos;
+    })
+    .catch(function (err) {
+        if (err && err.code && err.code === 'SQLITE_ERROR') {
+            log.trace('Checking for version file: ', versionFile);
+            
+            return fs.readFile$(versionFile)
+            .then(function (data) {
+                var pos = parseInt(data.toString().split(/[\r\n]/)[0], 10);
+                if (isNaN(pos)) { throw 'invalid'; }
+                
+                log.info('Loaded position from file: ' + pos);
+                return pos;
+            });
+        }
+        throw err;
+    })
+    .catch(function (err) {
+        if (err && err.cause && err.cause.code === 'ENOENT') {
+            log.info('Defaulting to position -1');
+            return -1;
+        }
+        throw err;
+    });
+});
+
+// find the last migration that has been run
+Flight.prototype.getIdx = function () {
+    log.trace('Flight.getIdx()');
+    
+    var self = this,
+        items = self.items;
+    
+    if (items.length === 0) {
+        return -1;
+    }
+    
+    var low = 0, high = items.length - 1,
+        i, find = self.pos, comparison;
+    
+    var idx;
+
+    while (low <= high) {
+        i = Math.floor((low + high) / 2);
+        if (items[i].ts < find) { low = i + 1; continue; };
+        if (items[i].ts > find) { high = i - 1; continue; };
+        return i;
+    }
+    
+    // no exact match, return the first lower value
+    if (items[i].ts < find) { return i; }
+    else { return i - 1; }
+};
+
+Flight.prototype.update = function () {
+    log.trace('Flight.update()');
+    
+    var self = this;
+    
+    return self.init().then(function () {
+        return self.migrateTo(self.items.length - 1);
+    });
+};
+Flight.prototype.upBy = function (amount) {
+    log.trace('Flight.upBy()', amount);
+    
+    var self = this;
+    
+    return self.init().then(function () {
+        var destIdx = Math.min(self.idx + amount, self.items.length - 1);
+        return self.migrateTo(destIdx);
+    });
+};
+Flight.prototype.downBy = function (amount) {
+    log.trace('Flight.downBy()', amount);
+    
+    var self = this;
+    
+    return self.init().then(function () {
+        var destIdx = Math.max(self.idx - amount, -1);
+        return self.migrateTo(destIdx);
+    });
 };
 Flight.prototype.upTo =
-Flight.prototype.up = function (_target) {
-    log.trace('Flight.up()');
-
-    if (this.items.length === 0) {
-        return Promise.reject('Load some migrations first!');
-    }
-
-    var self = this,
-        i = 0,
-        x = self.items.length,
-        target = _target === void 0 ? self.items[x-1].idx : _target,
-        curPos = self.pos,
-        count = self.dist,
-        promise = Promise.resolve();
-    
-    // seek to current position
-    while (i < x && curPos >= self.items[i].idx) { i++; }
-    
-    // apply migrations
-    while (i < x && count) {
-        (function (item, newPos) {
-            if (self.dry) {
-                promise = promise.then(function () {
-                    log.silly('Migrating up: ' + item.name);
-                    return item.dryUp()
-                });
-            } else {
-                promise = promise.then(function () {
-                    log.silly('Migrating up: ' + item.name);
-                    var res = item.up();
-                    if (res && typeof res.then === 'function') {
-                        res = res.then(function (res) {
-                            self.setPos(newPos);
-                            return res;
-                        }).catch(function (err) {
-                            if (typeof item.recover === 'function') {
-                                log.warn('Attempting to recover from error:', err);
-                                var rec = item.recover();
-                                if (rec && typeof rec.then === 'function') {
-                                    return rec;
-                                }
-                            }
-                            throw err;
-                        });
-                    } else {
-                        throw new Error('Function didn\'t return a promise');
-                        //self.setPos(newPos);
-                    }
-                    return res;
-                });
-            }
-        })(self.items[i], self.items[i].idx);
-        i++; count--;
-    }
-    
-    return promise.catch(function (err) {
-        log.error(err);
-        self.end();
-        throw err;
-    });
-};
-
 Flight.prototype.downTo =
-Flight.prototype.down = function (_target) {
-    log.trace('Flight.down()');
+Flight.prototype.migrateTo = function (destIdx) {
+    log.trace('Flight.migrateTo()', destIdx);
     
-    if (this.items.length === 0) {
-        return Promise.reject('Load some migrations first!');
-    }
-
-    var self = this,
-        i = 0,
-        x = self.items.length,
-        target = _target === void 0 ? self.items[x-1].idx : _target,
-        curPos = self.pos,
-        count = self.dist,
-        promise = Promise.resolve();
+    var self = this;
     
-    // seek to current position
-    while (i < x && curPos >= self.items[i].idx) { i++; }
-    i--;
-    
-    // apply migrations
-    while (i >= 0 && count) {
-        (function (item, newPos) {
-            if (self.dry) {
-                promise = promise.then(function () {
-                    log.silly('Migrating down: ' + item.name);
-                    return item.dryDown();
-                });
-            } else {
-                promise = promise.then(function () {
-                    log.silly('Migrating down: ' + item.name);
-                    var res = item.down();
-                    
-                    if (res && typeof res.then === 'function') {
-                        res = res.then(function (res) {
-                            self.setPos(newPos);
-                            return res;
-                        });
-                    } else {
-                        throw new Error('Function didn\'t return a promise');
-                        //self.setPos(newPos);
-                    }
-                    
-                    return res;
-                });
-            }
-        })(self.items[i], i > 0 ? self.items[i-1].idx : 0);
+    return self.init().then(function () {
+        var items = self.items,
+            curIdx = self.idx;
         
-        i--; count--;
-    }
-    
-    return promise.catch(function (err) {
-        log.error(err);
-        self.end();
-        throw err;
+        if (destIdx < -1 || destIdx >= items.length || destIdx !== destIdx|0) {
+            throw new Error('Invalid destIdx: ' + destIdx);
+        }
+        
+        if (curIdx === destIdx) { return; }
+        
+        if (curIdx > destIdx) {
+            return self._migrateDown(curIdx, destIdx, items);
+        }
+        
+        if (curIdx < destIdx) {
+            // curIdx is either -1, or the last successful migration;
+            // either way we don't want to run what it points to, but the
+            // next one above, when moving up
+            return self._migrateUp(curIdx + 1, destIdx, items);
+        }
+    }).then(function () {
+        return self.storeVersion();
     });
 };
+Flight.prototype._migrateUp = Promise.method(function (idx, destIdx, items) {
+    log.trace('Flight._migrateUp()', idx, destIdx);
+    
+    var self = this;
+    
+    if (idx > destIdx) { return; }
+        
+    var migration = items[idx];
+
+    return Promise.try(function () {
+        log.silly('Migrating up: ' + migration.name);
+        if (!self.dry) {
+            return migration.up();
+        }
+    })
+    .then(function (res) {
+        log.trace('OK.');
+        if (!self.dry) {
+            self.pos = migration.ts;
+            self.idx = idx;
+        }
+        
+        return self._migrateUp(idx + 1, destIdx, items);
+    })
+    .catch(function (err) {
+        log.warn('Migration up to ' + migration.name + ' failed: ' + err);
+        throw err;
+    });
+});
+Flight.prototype._migrateDown = Promise.method(function (idx, destIdx, items) {
+    log.trace('Flight._migrateDown()', idx, destIdx);
+
+    var self = this;
+    
+    if (idx <= destIdx) { return; }
+        
+    var migration = items[idx];
+
+    return Promise.try(function () {
+        log.silly('Migrating down: ' + migration.name);
+        
+        if (!self.dry) {
+            return migration.down();
+        }
+    })
+    .then(function (res) {
+        log.trace('OK.');
+        
+        if (!self.dry) {
+            self.pos = migration.ts;
+            self.idx = idx;
+        }
+        
+        return self._migrateDown(idx - 1, destIdx, items);
+    })
+    .catch(function (err) {
+        log.warn('Migration down to ' + migration.name + ' failed: ' + err);
+        throw err;
+    });
+});
+
 Flight.prototype.loadFiles = function () {
     log.trace('Flight.loadFiles()');
 
@@ -175,20 +266,30 @@ Flight.prototype.loadFiles = function () {
         path = self.path,
         mask = self.mask;
     
-    return Promise.promisify(fs.readdir)(path).filter(function (fileName) {
+    return fs.readdir$(path)
+    .catch(function (err) {
+        if (err.cause && err.cause.code === 'ENOENT') {
+            log.trace('No such directory: ' + path);
+            return [ ];
+        } else {
+            throw err;
+        }
+    }).filter(function (fileName) {
         return mask.test(fileName);
     }).map(function (fileName) {
         var fullPath = PATH.join(path, fileName);
-        return Promise.promisify(fs.stat)(fullPath).tap(function (stat) {
+        return fs.stat$(fullPath).tap(function (stat) {
             stat.fullPath = fullPath;
             stat.fileName = fileName;
         });
     }).filter(function (stat) {
         return stat.isFile();
     }).map(function (stat) {
+        log.trace('Found file: ' + PATH.basename(stat.fullPath));
+        
         return new Migration({
             path: stat.fullPath,
-            idx: stat.fileName.match(mask)[1]
+            ts: stat.fileName.match(mask)[1]
         }, {
             log: log,
             knex: self.knex,
@@ -196,21 +297,53 @@ Flight.prototype.loadFiles = function () {
         });
     }).then(function (migrations) {
         self.items.push.apply(self.items, migrations);
-        return self.items.sort(function (a, b) { return a.idx - b.idx; });
+        return self.items.sort(function (a, b) { return a.ts - b.ts; });
     });
 };
 
+Flight.prototype.storeVersion = function () {
+    if (this.dry) { return; }
+    
+    var self = this,
+        knex = self.knex,
+        version = self.pos;
+    
+    var versionFile = PATH.join(self.path, '.flight');
+    log.info('Ending position: ' + version);
+    
+    return knex.schema.hasTable('__flight')
+    .then(function (has) {
+        if (has) { return; }
+        return knex.schema.createTable('__flight', function (table) {
+            table.integer('version');
+        });
+    })
+    .then(function () {
+        return knex('__flight').truncate().insert({ version: version });
+    })
+    .catch(function (err) {
+        log.warn('Error storing version in database: ' + err);
+        return fs.writeFile$(versionFile, String(version));
+    })
+    .catch(function (err) {
+        log.warn(err);
+    });
+}
 Flight.prototype.end = function () {
-    log.info('Ending position: ' + this.pos);
-    fs.writeFileSync(PATH.join(this.path, '.flight'), this.pos);
-    this.knex.client.pool.destroy();
+    var self = this,
+        knex = self.knex
+    
+    return this.storeVersion()
+    .then(function () {
+        return knex.client.pool.destroy();
+    });
 };
 
 function Migration(opts, deps) {
     log.trace('new Migration()', opts);
     this.fullPath = opts.path;
     this.name = PATH.basename(opts.path, '.js');
-    this.idx = opts.idx;
+    this.ts = opts.ts;
     var mod = require(opts.path)(deps);
     this.up = mod.up;
     this.down = mod.down;

@@ -1,16 +1,29 @@
 {
   "name": "flight",
-  "version": "0.0.0",
-  "description": "",
-  "main": "./flight",
-  "bin": { "flight": "./flight" },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "version": "0.1.0",
+  "description": "Migration manager module & command line tool using Knex",
+  "main": "./index",
+  "bin": {
+    "flight": "./flight"
   },
-  "author": "",
+  "scripts": {
+    "test": "mocha -u bdd -R mocha-unfunk-reporter test/*.test.js"
+  },
+  "author": "Kris Reeves",
   "license": "ISC",
   "dependencies": {
     "bluebird": "^2.2.2",
-    "logger": "git+https://github.com/myndzi/logger.git"
+    "knex": "^0.6.22",
+    "logger": "git+https://github.com/myndzi/logger.git",
+    "mysql": "^2.4.2",
+    "parent-root": "^0.1.0",
+    "pg": "^3.4.1",
+    "sqlite3": "^2.2.7"
+  },
+  "devDependencies": {
+    "mocha": "^1.21.4",
+    "mocha-unfunk-reporter": "^0.4.0",
+    "should": "^4.0.4",
+    "should-eventually": "^0.1.1"
   }
 }
