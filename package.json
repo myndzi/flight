@@ -2,7 +2,8 @@
   "name": "flight",
   "version": "0.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "./flight",
+  "bin": { "flight": "./flight" },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
