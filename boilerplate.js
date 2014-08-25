@@ -9,9 +9,6 @@ module.exports = function (deps) {
         up: function () {
             
         },
-        recover: function () {
-            
-        },
         down: function () {
             
         }

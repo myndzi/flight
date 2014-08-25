@@ -9,7 +9,7 @@ Promise.promisifyAll(fs, { suffix: '$' });
 var parentRoot = require('parent-root');
 
 var baseDir = parentRoot(),
-    log = new Logger('Migration', 'trace');
+    log = new Logger('Migration');
 
 module.exports = Flight;
 
@@ -59,7 +59,6 @@ Flight.prototype.init = function () {
         self.items = items;
         self.pos = pos;
         self.idx = self.getIdx();
-        console.log('index: ', self.idx);
         self.initialized = true;
     });
 };
@@ -170,13 +169,15 @@ Flight.prototype.downBy = function (amount) {
 Flight.prototype.upTo =
 Flight.prototype.downTo =
 Flight.prototype.migrateTo = function (destIdx) {
-    log.trace('Flight.migrateTo()', destIdx);
+    log.silly('Flight.migrateTo('+destIdx+')');
     
     var self = this;
     
     return self.init().then(function () {
         var items = self.items,
             curIdx = self.idx;
+        
+        if (items.length === 0) { return; }
         
         if (destIdx < -1 || destIdx >= items.length || destIdx !== destIdx|0) {
             throw new Error('Invalid destIdx: ' + destIdx);
@@ -248,7 +249,7 @@ Flight.prototype._migrateDown = Promise.method(function (idx, destIdx, items) {
         
         if (!self.dry) {
             self.pos = migration.ts;
-            self.idx = idx;
+            self.idx = idx - 1;
         }
         
         return self._migrateDown(idx - 1, destIdx, items);
