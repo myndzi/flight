@@ -13,7 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "bluebird": "^2.2.2",
-    "knex": "^0.6.22",
+    "knex": "git+https://github.com/myndzi/knex",
     "logger": "git+https://github.com/myndzi/logger.git",
     "mysql": "^2.4.2",
     "parent-root": "^0.1.0",
