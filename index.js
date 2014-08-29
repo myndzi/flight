@@ -220,12 +220,13 @@ Flight.prototype._migrateUp = Promise.method(function (idx, destIdx, items) {
             self.pos = migration.ts;
             self.idx = idx;
         }
-        
-        return self._migrateUp(idx + 1, destIdx, items);
     })
     .catch(function (err) {
         log.warn('Migration up to ' + migration.name + ' failed: ' + err);
         throw err;
+    })
+    .then(function () {
+        return self._migrateUp(idx + 1, destIdx, items);
     });
 });
 Flight.prototype._migrateDown = Promise.method(function (idx, destIdx, items) {
@@ -251,12 +252,13 @@ Flight.prototype._migrateDown = Promise.method(function (idx, destIdx, items) {
             self.pos = migration.ts;
             self.idx = idx - 1;
         }
-        
-        return self._migrateDown(idx - 1, destIdx, items);
     })
     .catch(function (err) {
         log.warn('Migration down to ' + migration.name + ' failed: ' + err);
         throw err;
+    })
+    .then(function () {
+        return self._migrateDown(idx - 1, destIdx, items);
     });
 });
 
