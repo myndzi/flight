@@ -29,7 +29,7 @@ function doTest(path) {
     var Flight = require('./index');
     var flight = new Flight({
         knex: knex,
-        path: PATH.resolve(process.cwd(), path || 'migrations')
+        path: PATH.resolve(path || PATH.join(process.cwd(), 'migrations'))
     });
 
     flight.update().then(function () {
