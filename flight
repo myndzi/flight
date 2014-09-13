@@ -4,6 +4,10 @@ var cmd = process.argv[2],
     name = process.argv[3];
 
 switch (cmd) {
+    case 'test':
+        doTest(name);
+    break;
+
     case 'create':
         if (name) {
             createFile(name);
@@ -16,6 +20,29 @@ switch (cmd) {
     break;
 }
 
+function doTest(path) {
+    var PATH = require('path');
+    var knex = require('knex')({
+        client: 'sqlite3',
+        connection: { filename: ':memory:' }
+    });
+    var Flight = require('./index');
+    var flight = new Flight({
+        knex: knex,
+        path: PATH.resolve(process.cwd(), path || 'migrations')
+    });
+
+    flight.update().then(function () {
+        return flight.downTo(-1);
+    }).then(function () {
+        return flight.update();
+    }).then(function () {
+        console.log('Success');
+        process.exit(0);
+    }).finally(function () {
+        knex.destroy();
+    });
+}
 function createFile(name) {
     var fileName = [
             './migrations/',

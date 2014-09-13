@@ -77,35 +77,25 @@ Flight.prototype.loadPos = Promise.method(function () {
     var versionFile = PATH.join(self.path, '.flight');
 
     log.trace('Checking for version in database');
-    return knex('__flight').select('version')
+    return knex.schema.hasTable('__flight')
+    .then(function (exists) {
+        if (exists) {
+            return knex.select('version').from('__flight');
+        }
+        log.info('Creating system table...');
+        return knex.schema.createTable('__flight', function () {
+            this.string('version');
+        })
+        .then(function () {
+            return knex.insert({ version: 0 }).into('__flight');
+        }).return([{ version: 0 }]);
+    })
     .then(function (rows) {
         if (!rows.length) { throw 'no results'; }
         var pos = parseInt(rows[0].version, 10);
         if (isNaN(pos)) { throw 'invalid'; }
         log.info('Loaded position from database: ' + pos);
         return pos;
-    })
-    .catch(function (err) {
-        if (err && err.code && err.code === 'SQLITE_ERROR') {
-            log.trace('Checking for version file: ', versionFile);
-            
-            return fs.readFile$(versionFile)
-            .then(function (data) {
-                var pos = parseInt(data.toString().split(/[\r\n]/)[0], 10);
-                if (isNaN(pos)) { throw 'invalid'; }
-                
-                log.info('Loaded position from file: ' + pos);
-                return pos;
-            });
-        }
-        throw err;
-    })
-    .catch(function (err) {
-        if (err && err.cause && err.cause.code === 'ENOENT') {
-            log.info('Defaulting to position -1');
-            return -1;
-        }
-        throw err;
     });
 });
 
@@ -311,25 +301,14 @@ Flight.prototype.storeVersion = function () {
         knex = self.knex,
         version = self.pos;
     
-    var versionFile = PATH.join(self.path, '.flight');
     log.info('Ending position: ' + version);
     
-    return knex.schema.hasTable('__flight')
-    .then(function (has) {
-        if (has) { return; }
-        return knex.schema.createTable('__flight', function (table) {
-            table.integer('version');
-        });
-    })
+    return knex('__flight').truncate()
     .then(function () {
-        return knex('__flight').truncate().insert({ version: version });
+        return knex.insert({ version: version }).into('__flight')
     })
     .catch(function (err) {
         log.warn('Error storing version in database: ' + err);
-        return fs.writeFile$(versionFile, String(version));
-    })
-    .catch(function (err) {
-        log.warn(err);
     });
 }
 Flight.prototype.end = function () {
