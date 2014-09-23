@@ -38,9 +38,10 @@ function doTest(path) {
         return flight.update();
     }).then(function () {
         console.log('Success');
-        process.exit(0);
+    }).catch(function (err) {
+        console.log(err.stack || err.message || err);
     }).finally(function () {
-        knex.destroy();
+        process.exit(0);
     });
 }
 function createFile(name) {
