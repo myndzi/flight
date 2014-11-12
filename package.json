@@ -17,13 +17,13 @@
     "logger": "git+https://github.com/myndzi/logger.git",
     "mysql": "^2.4.2",
     "parent-root": "^0.1.0",
-    "pg": "^3.4.1",
-    "sqlite3": "^2.2.7"
+    "pg": "^3.4.1"
   },
   "devDependencies": {
     "mocha": "^1.21.4",
     "mocha-unfunk-reporter": "^0.4.0",
     "should": "^4.0.4",
-    "should-eventually": "^0.1.1"
+    "should-eventually": "^0.1.1",
+    "sqlite3": "^2.2.7"
   }
 }
