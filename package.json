@@ -7,7 +7,7 @@
     "flight": "./flight"
   },
   "scripts": {
-    "test": "mocha -u bdd -R mocha-unfunk-reporter test/*.test.js"
+    "test": "mocha --bail -u bdd -R mocha-unfunk-reporter test/*.test.js"
   },
   "author": "Kris Reeves",
   "license": "ISC",

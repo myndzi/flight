@@ -87,8 +87,8 @@ Flight.prototype.loadPos = Promise.method(function () {
             this.string('version');
         })
         .then(function () {
-            return knex.insert({ version: 0 }).into('__flight');
-        }).return([{ version: 0 }]);
+            return knex.insert({ version: '0' }).into('__flight');
+        }).return([{ version: '0' }]);
     })
     .then(function (rows) {
         if (!rows.length) { throw 'no results'; }

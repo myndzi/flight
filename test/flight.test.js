@@ -35,11 +35,23 @@ describe('Flight', function () {
         var knex;
         
         before(function () {
-            return initDryRunDb(dbFile)
-            .then(function () {
+            return fs.unlink$(dbFile)
+            .catch(function (err) {
+                if (err.cause && err.cause.code === 'ENOENT') {
+                    return;
+                }
+                throw err;
+            }).then(function () {
                 knex = Knex({
                     client: 'sqlite3',
                     connection: { filename: dbFile }
+                });
+            
+                return knex.schema.createTable('foo', function (table) {
+                    table.increments('id');
+                    table.string('thing');
+                }).then(function () {
+                    return knex.insert({ thing: 'bar' }).into('foo');
                 });
             });
         });
