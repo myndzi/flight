@@ -287,9 +287,12 @@ Flight.prototype.loadFiles = function () {
             log: log,
             knex: self.knex,
             Promise: Promise,
-            updateSeq: function (table) {
-                var seq = table + '_seq';
-                return self.knex.raw("SELECT setval('"+seq+"',(SELECT GREATEST(MAX(id)+1,nextval('"+seq+"'))-1 FROM "+table+"))");
+            updateSeq: function (table, pkey) {
+                return function () {
+                    pkey = pkey || 'id';
+                    var seq = table+'_'+pkey+'_seq';
+                    return self.knex.raw("SELECT setval('"+seq+"',(SELECT GREATEST(MAX(id)+1,nextval('"+seq+"'))-1 FROM "+table+"))");
+                };
             }
         });
     }).then(function (migrations) {
