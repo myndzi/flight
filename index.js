@@ -286,7 +286,11 @@ Flight.prototype.loadFiles = function () {
         }, {
             log: log,
             knex: self.knex,
-            Promise: Promise
+            Promise: Promise,
+            updateSeq: function (table) {
+                var seq = table + '_seq';
+                return self.knex.raw("SELECT setval('"+seq+"',(SELECT GREATEST(MAX(id)+1,nextval('"+seq+"'))-1 FROM "+table+"))");
+            }
         });
     }).then(function (migrations) {
         self.items.push.apply(self.items, migrations);
