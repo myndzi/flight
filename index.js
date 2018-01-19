@@ -1,7 +1,7 @@
 var fs = require('fs'),
     Knex = require('knex'),
     PATH = require('path'),
-    Logger = require('logger'),
+    Logger = require('@myndzi/logger'),
     Promise = require('bluebird');
 
 Promise.promisifyAll(fs, { suffix: '$' });
