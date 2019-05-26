@@ -12,18 +12,17 @@
   "author": "Kris Reeves",
   "license": "ISC",
   "dependencies": {
-    "bluebird": "^2.2.2",
-    "knex": "git+https://github.com/myndzi/knex",
     "@myndzi/logger": "git+https://github.com/myndzi/logger.git",
-    "mysql": "^2.4.2",
+    "bluebird": "^3.5.5",
+    "knex": "^0.16.5",
+    "mysql": "^2.17.1",
     "parent-root": "^0.1.0",
-    "pg": "^3.4.1"
+    "pg": "^7.11.0"
   },
   "devDependencies": {
-    "mocha": "^1.21.4",
+    "mocha": "^6.1.4",
     "mocha-unfunk-reporter": "^0.4.0",
-    "should": "^4.0.4",
-    "should-eventually": "^0.1.1",
-    "sqlite3": "^2.2.7"
+    "should": "^13.2.3",
+    "sqlite3": "^4.0.8"
   }
 }

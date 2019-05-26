@@ -1,6 +1,6 @@
 'use strict';
 
-var should = require('should-eventually'),
+var should = require('should'),
     Flight = require('../index');
 
 var PATH = require('path'),
@@ -31,9 +31,9 @@ describe('Flight', function () {
         var dbPath = PATH.join(baseDir, 'test/fixtures/1'),
             dbFile = PATH.join(dbPath, 'sqlite3.db'),
             migrationPath = PATH.join(dbPath, 'migrations');
-        
+
         var knex;
-        
+
         before(function () {
             return fs.unlink$(dbFile)
             .catch(function (err) {
@@ -44,9 +44,10 @@ describe('Flight', function () {
             }).then(function () {
                 knex = Knex({
                     client: 'sqlite3',
+                    useNullAsDefault: true,
                     connection: { filename: dbFile }
                 });
-            
+
                 return knex.schema.createTable('foo', function (table) {
                     table.increments('id');
                     table.string('thing');
@@ -55,29 +56,34 @@ describe('Flight', function () {
                 });
             });
         });
-        after(function () { return fs.unlink$(dbFile); });
-        
+        after(function () {
+            return Promise.all([
+                fs.unlink$(dbFile),
+                knex.destroy()
+            ]);
+        });
+
         it('should not modify the database if \'dry\' is true', function () {
             var flight = new Flight({
                 path: migrationPath,
                 knex: knex,
                 dry: true
             });
-            
+
             return flight.update()
             .then(function () {
                 return knex.schema.hasColumn('foo', 'bar')
                     .should.eventually.equal(false);
             });
         });
-        
+
         describe('migrate up', function () {
             it('should add the \'bar\' column', function () {
                 var flight = new Flight({
                     path: migrationPath,
                     knex: knex
                 });
-                
+
                 return flight.update(knex)
                 .then(function () {
                     return knex.schema.hasColumn('foo', 'bar')
@@ -92,7 +98,7 @@ describe('Flight', function () {
                     knex: knex,
                     debug: true
                 });
-                
+
                 return flight.downBy(1)
                 .then(function () {
                     return knex.schema.hasColumn('foo', 'bar')
@@ -101,7 +107,7 @@ describe('Flight', function () {
             });
         });
     });
-    
+
 });
 
 function initDryRunDb(dbFile) {
@@ -114,7 +120,7 @@ function initDryRunDb(dbFile) {
     })
     .then(function () {
         var db;
-        
+
         return new Promise(function (resolve, reject) {
             db = new sqlite3.Database(dbFile, function (err) {
                 if (err) { return reject(err); }

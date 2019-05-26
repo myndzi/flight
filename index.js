@@ -18,11 +18,12 @@ function Flight(config) {
 
     var self = this;
     config = config || { };
-    
+
     if (!config.knex) {
         log.trace('Using in-memory sqlite3 database');
         this.knex = Knex({
             client: 'sqlite3',
+            useNullAsDefault: true,
             connection: { filename: ':memory:' }
         });
     } else if (typeof config.knex === 'function') {
@@ -32,7 +33,7 @@ function Flight(config) {
         log.trace('Using provided database configuration');
         this.knex = Knex(config.knex);
     }
-    
+
     this.dry = config.dry || false;
     this.path = config.path || PATH.join(baseDir, 'migrations');
     log.silly('Using path: ' + this.path);
@@ -40,18 +41,18 @@ function Flight(config) {
     this.dist = typeof config.distance === 'number' ? config.distance : 1;
 
     this._init = null;
-    
+
     this.items = [ ];
     this.idx = -1;
     this.pos = config.hasOwnProperty('version') ? config.version : -1;
 }
 Flight.prototype.init = function () {
     log.trace('Flight.init()');
-    
+
     var self = this;
-    
+
     if (self._init) { return self._init; }
-    
+
     return self._init = Promise.all([
         self.loadFiles(self.path),
         self.loadPos()
@@ -64,16 +65,16 @@ Flight.prototype.init = function () {
 };
 Flight.prototype.loadPos = Promise.method(function () {
     log.trace('Flight.loadPos()');
-    
+
     var self = this,
         knex = self.knex,
         pos = parseInt(self.pos, 10);
-    
+
     if (!isNaN(pos) && pos >= 0) {
         log.info('Loaded position from configuration: ' + pos);
         return pos;
     }
-    
+
     var versionFile = PATH.join(self.path, '.flight');
 
     log.trace('Checking for version in database');
@@ -102,17 +103,17 @@ Flight.prototype.loadPos = Promise.method(function () {
 // find the last migration that has been run
 Flight.prototype.getIdx = function () {
     log.trace('Flight.getIdx()');
-    
+
     var self = this,
         items = self.items;
-    
+
     if (items.length === 0) {
         return -1;
     }
-    
+
     var low = 0, high = items.length - 1,
         i, find = self.pos, comparison;
-    
+
     var idx;
 
     while (low <= high) {
@@ -121,7 +122,7 @@ Flight.prototype.getIdx = function () {
         if (items[i].ts > find) { high = i - 1; continue; };
         return i;
     }
-    
+
     // no exact match, return the first lower value
     if (items[i].ts < find) { return i; }
     else { return i - 1; }
@@ -129,18 +130,18 @@ Flight.prototype.getIdx = function () {
 
 Flight.prototype.update = function () {
     log.trace('Flight.update()');
-    
+
     var self = this;
-    
+
     return self.init().then(function () {
         return self.migrateTo(self.items.length - 1);
     });
 };
 Flight.prototype.upBy = function (amount) {
     log.trace('Flight.upBy()', amount);
-    
+
     var self = this;
-    
+
     return self.init().then(function () {
         var destIdx = Math.min(self.idx + amount, self.items.length - 1);
         return self.migrateTo(destIdx);
@@ -148,9 +149,9 @@ Flight.prototype.upBy = function (amount) {
 };
 Flight.prototype.downBy = function (amount) {
     log.trace('Flight.downBy()', amount);
-    
+
     var self = this;
-    
+
     return self.init().then(function () {
         var destIdx = Math.max(self.idx - amount, -1);
         return self.migrateTo(destIdx);
@@ -160,25 +161,25 @@ Flight.prototype.upTo =
 Flight.prototype.downTo =
 Flight.prototype.migrateTo = function (destIdx) {
     log.silly('Flight.migrateTo('+destIdx+')');
-    
+
     var self = this;
-    
+
     return self.init().then(function () {
         var items = self.items,
             curIdx = self.idx;
-        
+
         if (items.length === 0) { return; }
-        
+
         if (destIdx < -1 || destIdx >= items.length || destIdx !== destIdx|0) {
             throw new Error('Invalid destIdx: ' + destIdx);
         }
-        
+
         if (curIdx === destIdx) { return; }
-        
+
         if (curIdx > destIdx) {
             return self._migrateDown(curIdx, destIdx, items);
         }
-        
+
         if (curIdx < destIdx) {
             // curIdx is either -1, or the last successful migration;
             // either way we don't want to run what it points to, but the
@@ -191,11 +192,11 @@ Flight.prototype.migrateTo = function (destIdx) {
 };
 Flight.prototype._migrateUp = Promise.method(function (idx, destIdx, items) {
     log.trace('Flight._migrateUp()', idx, destIdx);
-    
+
     var self = this;
-    
+
     if (idx > destIdx) { return; }
-        
+
     var migration = items[idx];
 
     return Promise.try(function () {
@@ -223,21 +224,21 @@ Flight.prototype._migrateDown = Promise.method(function (idx, destIdx, items) {
     log.trace('Flight._migrateDown()', idx, destIdx);
 
     var self = this;
-    
+
     if (idx <= destIdx) { return; }
-        
+
     var migration = items[idx];
 
     return Promise.try(function () {
         log.silly('Migrating down: ' + migration.name);
-        
+
         if (!self.dry) {
             return migration.down();
         }
     })
     .then(function (res) {
         log.trace('OK.');
-        
+
         if (!self.dry) {
             self.pos = migration.ts;
             self.idx = idx - 1;
@@ -258,7 +259,7 @@ Flight.prototype.loadFiles = function () {
     var self = this,
         path = self.path,
         mask = self.mask;
-    
+
     return fs.readdir$(path)
     .catch(function (err) {
         if (err.cause && err.cause.code === 'ENOENT') {
@@ -279,7 +280,7 @@ Flight.prototype.loadFiles = function () {
         return stat.isFile();
     }).map(function (stat) {
         log.trace('Found file: ' + PATH.basename(stat.fullPath));
-        
+
         return new Migration({
             path: stat.fullPath,
             ts: stat.fileName.match(mask)[1]
@@ -303,13 +304,13 @@ Flight.prototype.loadFiles = function () {
 
 Flight.prototype.storeVersion = function () {
     if (this.dry) { return; }
-    
+
     var self = this,
         knex = self.knex,
         version = self.pos;
-    
+
     log.info('Ending position: ' + version);
-    
+
     return knex('__flight').truncate()
     .then(function () {
         return knex.insert({ version: version }).into('__flight')
@@ -321,7 +322,7 @@ Flight.prototype.storeVersion = function () {
 Flight.prototype.end = function () {
     var self = this,
         knex = self.knex
-    
+
     return this.storeVersion()
     .then(function () {
         return knex.client.pool.destroy();
