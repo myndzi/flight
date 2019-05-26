@@ -1,6 +1,6 @@
 {
   "name": "flight",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Migration manager module & command line tool using Knex",
   "main": "./index",
   "bin": {
