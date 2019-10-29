@@ -15,7 +15,7 @@
   "dependencies": {
     "@myndzi/logger": "git+https://github.com/myndzi/logger.git",
     "bluebird": "^3.5.5",
-    "knex": "^0.16.5",
+    "knex": "^0.19.5",
     "mysql": "^2.17.1",
     "parent-root": "^0.1.0",
     "pg": "^7.11.0"
