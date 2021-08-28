@@ -1,6 +1,6 @@
 {
   "name": "flight",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Migration manager module & command line tool using Knex",
   "main": "./index",
   "bin": {
@@ -14,16 +14,18 @@
   "license": "ISC",
   "dependencies": {
     "@myndzi/logger": "git+https://github.com/myndzi/logger.git",
-    "bluebird": "^3.5.5",
-    "knex": "^0.16.5",
-    "mysql": "^2.17.1",
-    "parent-root": "^0.1.0",
-    "pg": "^7.11.0"
+    "bluebird": "^3.7.2",
+    "knex": "^0.95.10",
+    "mocha-unfunk-reporter": "^0.4.0",
+    "parent-root": "^0.1.0"
+  },
+  "peerDependencies": {
+    "mysql": "^2.18.1",
+    "pg": "^8.7.1"
   },
   "devDependencies": {
     "bamp": "^1.0.11",
     "mocha": "^6.1.4",
-    "mocha-unfunk-reporter": "^0.4.0",
     "should": "^13.2.3",
     "sqlite3": "^4.0.8"
   }

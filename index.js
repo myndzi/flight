@@ -17,7 +17,7 @@ function Flight(config) {
     log.trace('new Flight()');
 
     var self = this;
-    config = config || { };
+    config = config || {};
 
     if (!config.knex) {
         log.trace('Using in-memory sqlite3 database');
@@ -42,7 +42,7 @@ function Flight(config) {
 
     this._init = null;
 
-    this.items = [ ];
+    this.items = [];
     this.idx = -1;
     this.pos = config.hasOwnProperty('version') ? config.version : -1;
 }
@@ -79,25 +79,27 @@ Flight.prototype.loadPos = Promise.method(function () {
 
     log.trace('Checking for version in database');
     return knex.schema.hasTable('__flight')
-    .then(function (exists) {
-        if (exists) {
-            return knex.select('version').from('__flight');
-        }
-        log.info('Creating system table...');
-        return knex.schema.createTable('__flight', function () {
-            this.string('version');
+        .then(function (exists) {
+            if (exists) {
+                return knex.select('version').from('__flight');
+            }
+            log.info('Creating system table...');
+            return knex.schema.createTable('__flight', function () {
+                this.string('version');
+            })
+                .then(function () {
+                    return knex.insert({ version: '0' }).into('__flight');
+                }).then(function () {
+                    return [{ version: '0' }];
+                });
         })
-        .then(function () {
-            return knex.insert({ version: '0' }).into('__flight');
-        }).return([{ version: '0' }]);
-    })
-    .then(function (rows) {
-        if (!rows.length) { throw 'no results'; }
-        var pos = parseInt(rows[0].version, 10);
-        if (isNaN(pos)) { throw 'invalid'; }
-        log.info('Loaded position from database: ' + pos);
-        return pos;
-    });
+        .then(function (rows) {
+            if (!rows.length) { throw 'no results'; }
+            var pos = parseInt(rows[0].version, 10);
+            if (isNaN(pos)) { throw 'invalid'; }
+            log.info('Loaded position from database: ' + pos);
+            return pos;
+        });
 });
 
 // find the last migration that has been run
@@ -158,38 +160,38 @@ Flight.prototype.downBy = function (amount) {
     });
 };
 Flight.prototype.upTo =
-Flight.prototype.downTo =
-Flight.prototype.migrateTo = function (destIdx) {
-    log.silly('Flight.migrateTo('+destIdx+')');
+    Flight.prototype.downTo =
+    Flight.prototype.migrateTo = function (destIdx) {
+        log.silly('Flight.migrateTo(' + destIdx + ')');
 
-    var self = this;
+        var self = this;
 
-    return self.init().then(function () {
-        var items = self.items,
-            curIdx = self.idx;
+        return self.init().then(function () {
+            var items = self.items,
+                curIdx = self.idx;
 
-        if (items.length === 0) { return; }
+            if (items.length === 0) { return; }
 
-        if (destIdx < -1 || destIdx >= items.length || destIdx !== destIdx|0) {
-            throw new Error('Invalid destIdx: ' + destIdx);
-        }
+            if (destIdx < -1 || destIdx >= items.length || destIdx !== destIdx | 0) {
+                throw new Error('Invalid destIdx: ' + destIdx);
+            }
 
-        if (curIdx === destIdx) { return; }
+            if (curIdx === destIdx) { return; }
 
-        if (curIdx > destIdx) {
-            return self._migrateDown(curIdx, destIdx, items);
-        }
+            if (curIdx > destIdx) {
+                return self._migrateDown(curIdx, destIdx, items);
+            }
 
-        if (curIdx < destIdx) {
-            // curIdx is either -1, or the last successful migration;
-            // either way we don't want to run what it points to, but the
-            // next one above, when moving up
-            return self._migrateUp(curIdx + 1, destIdx, items);
-        }
-    }).then(function () {
-        return self.storeVersion();
-    });
-};
+            if (curIdx < destIdx) {
+                // curIdx is either -1, or the last successful migration;
+                // either way we don't want to run what it points to, but the
+                // next one above, when moving up
+                return self._migrateUp(curIdx + 1, destIdx, items);
+            }
+        }).then(function () {
+            return self.storeVersion();
+        });
+    };
 Flight.prototype._migrateUp = Promise.method(function (idx, destIdx, items) {
     log.trace('Flight._migrateUp()', idx, destIdx);
 
@@ -205,20 +207,20 @@ Flight.prototype._migrateUp = Promise.method(function (idx, destIdx, items) {
             return migration.up();
         }
     })
-    .then(function (res) {
-        log.trace('OK.');
-        if (!self.dry) {
-            self.pos = migration.ts;
-            self.idx = idx;
-        }
-    })
-    .catch(function (err) {
-        log.warn('Migration up to ' + migration.name + ' failed: ' + err);
-        throw err;
-    })
-    .then(function () {
-        return self._migrateUp(idx + 1, destIdx, items);
-    });
+        .then(function (res) {
+            log.trace('OK.');
+            if (!self.dry) {
+                self.pos = migration.ts;
+                self.idx = idx;
+            }
+        })
+        .catch(function (err) {
+            log.warn('Migration up to ' + migration.name + ' failed: ' + err);
+            throw err;
+        })
+        .then(function () {
+            return self._migrateUp(idx + 1, destIdx, items);
+        });
 });
 Flight.prototype._migrateDown = Promise.method(function (idx, destIdx, items) {
     log.trace('Flight._migrateDown()', idx, destIdx);
@@ -236,21 +238,21 @@ Flight.prototype._migrateDown = Promise.method(function (idx, destIdx, items) {
             return migration.down();
         }
     })
-    .then(function (res) {
-        log.trace('OK.');
+        .then(function (res) {
+            log.trace('OK.');
 
-        if (!self.dry) {
-            self.pos = migration.ts;
-            self.idx = idx - 1;
-        }
-    })
-    .catch(function (err) {
-        log.warn('Migration down to ' + migration.name + ' failed: ' + err);
-        throw err;
-    })
-    .then(function () {
-        return self._migrateDown(idx - 1, destIdx, items);
-    });
+            if (!self.dry) {
+                self.pos = migration.ts;
+                self.idx = idx - 1;
+            }
+        })
+        .catch(function (err) {
+            log.warn('Migration down to ' + migration.name + ' failed: ' + err);
+            throw err;
+        })
+        .then(function () {
+            return self._migrateDown(idx - 1, destIdx, items);
+        });
 });
 
 Flight.prototype.loadFiles = function () {
@@ -261,45 +263,45 @@ Flight.prototype.loadFiles = function () {
         mask = self.mask;
 
     return fs.readdir$(path)
-    .catch(function (err) {
-        if (err.cause && err.cause.code === 'ENOENT') {
-            log.trace('No such directory: ' + path);
-            return [ ];
-        } else {
-            throw err;
-        }
-    }).filter(function (fileName) {
-        return mask.test(fileName);
-    }).map(function (fileName) {
-        var fullPath = PATH.join(path, fileName);
-        return fs.stat$(fullPath).tap(function (stat) {
-            stat.fullPath = fullPath;
-            stat.fileName = fileName;
-        });
-    }).filter(function (stat) {
-        return stat.isFile();
-    }).map(function (stat) {
-        log.trace('Found file: ' + PATH.basename(stat.fullPath));
-
-        return new Migration({
-            path: stat.fullPath,
-            ts: stat.fileName.match(mask)[1]
-        }, {
-            log: log,
-            knex: self.knex,
-            Promise: Promise,
-            updateSeq: function (table, pkey) {
-                return function () {
-                    pkey = pkey || 'id';
-                    var seq = table+'_'+pkey+'_seq';
-                    return self.knex.raw("SELECT setval('"+seq+"',(SELECT GREATEST(MAX(id)+1,nextval('"+seq+"'))-1 FROM "+table+"))");
-                };
+        .catch(function (err) {
+            if (err.cause && err.cause.code === 'ENOENT') {
+                log.trace('No such directory: ' + path);
+                return [];
+            } else {
+                throw err;
             }
+        }).filter(function (fileName) {
+            return mask.test(fileName);
+        }).map(function (fileName) {
+            var fullPath = PATH.join(path, fileName);
+            return fs.stat$(fullPath).tap(function (stat) {
+                stat.fullPath = fullPath;
+                stat.fileName = fileName;
+            });
+        }).filter(function (stat) {
+            return stat.isFile();
+        }).map(function (stat) {
+            log.trace('Found file: ' + PATH.basename(stat.fullPath));
+
+            return new Migration({
+                path: stat.fullPath,
+                ts: stat.fileName.match(mask)[1]
+            }, {
+                log: log,
+                knex: self.knex,
+                Promise: Promise,
+                updateSeq: function (table, pkey) {
+                    return function () {
+                        pkey = pkey || 'id';
+                        var seq = table + '_' + pkey + '_seq';
+                        return self.knex.raw("SELECT setval('" + seq + "',(SELECT GREATEST(MAX(id)+1,nextval('" + seq + "'))-1 FROM " + table + "))");
+                    };
+                }
+            });
+        }).then(function (migrations) {
+            self.items.push.apply(self.items, migrations);
+            return self.items.sort(function (a, b) { return a.ts - b.ts; });
         });
-    }).then(function (migrations) {
-        self.items.push.apply(self.items, migrations);
-        return self.items.sort(function (a, b) { return a.ts - b.ts; });
-    });
 };
 
 Flight.prototype.storeVersion = function () {
@@ -312,21 +314,21 @@ Flight.prototype.storeVersion = function () {
     log.info('Ending position: ' + version);
 
     return knex('__flight').truncate()
-    .then(function () {
-        return knex.insert({ version: version }).into('__flight')
-    })
-    .catch(function (err) {
-        log.warn('Error storing version in database: ' + err);
-    });
+        .then(function () {
+            return knex.insert({ version: version }).into('__flight')
+        })
+        .catch(function (err) {
+            log.warn('Error storing version in database: ' + err);
+        });
 }
 Flight.prototype.end = function () {
     var self = this,
         knex = self.knex
 
     return this.storeVersion()
-    .then(function () {
-        return knex.client.pool.destroy();
-    });
+        .then(function () {
+            return knex.client.pool.destroy();
+        });
 };
 
 function Migration(opts, deps) {
